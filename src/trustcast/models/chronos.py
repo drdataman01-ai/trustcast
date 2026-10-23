@@ -1,4 +1,5 @@
-"""Chronos adapter (Amazon). Weights are downloaded from Hugging Face and cached."""
+"""Chronos adapter (Amazon): Chronos-2, Chronos-Bolt and original Chronos.
+Weights are downloaded from Hugging Face and cached. pip install chronos-forecasting"""
 
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ class Chronos(ForecastModel):
 
     def _load(self):
         if self._pipe is None:
-            from chronos import BaseChronosPipeline  # pip install chronos-forecasting
+            from chronos import BaseChronosPipeline
 
             self._pipe = BaseChronosPipeline.from_pretrained(
                 self.hf_id, revision=self.revision, device_map=self.device
@@ -27,9 +28,19 @@ class Chronos(ForecastModel):
         import torch
 
         pipe = self._load()
-        context = torch.tensor(np.asarray(y, dtype=float), dtype=torch.float32)
-        q, mean = pipe.predict_quantiles(context, prediction_length=horizon,
+        context = np.asarray(y, dtype=np.float32)
+        if type(pipe).__name__ == "Chronos2Pipeline":
+            # Chronos-2 takes a list of series; each output is (n_variates, horizon, n_quantiles)
+            inputs = [context]
+        else:
+            # Chronos / Chronos-Bolt take a tensor; output is (batch, horizon, n_quantiles)
+            inputs = torch.tensor(context)
+        q, mean = pipe.predict_quantiles(inputs, prediction_length=horizon,
                                          quantile_levels=list(quantiles))
-        q, mean = q[0].numpy(), mean[0].numpy()  # (horizon, n_quantiles), (horizon,)
+        q, mean = np.asarray(q[0], dtype=float), np.asarray(mean[0], dtype=float)
+        while q.ndim > 2:      # drop the variate / batch axis -> (horizon, n_quantiles)
+            q = q[0]
+        while mean.ndim > 1:   # -> (horizon,)
+            mean = mean[0]
         return Forecast(mean=mean, quantiles={ql: q[:, i] for i, ql in enumerate(quantiles)},
                         model=self.name)

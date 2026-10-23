@@ -26,7 +26,6 @@ research and non-production use only (research lab, not the commercial arm).
 from __future__ import annotations
 
 import argparse
-import difflib
 import platform
 import sys
 import time
@@ -35,26 +34,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from trustcast.data import etl, store
-from trustcast.data.prepare import PrepConfig, prepare_one
+from trustcast.data import store
+from trustcast.data.select import future_dates, load_one
 
 CHECKPOINT = "google/timesfm-3.0-pytorch"
 ROOT = Path(__file__).resolve().parents[1]
 Q10, Q50, Q90 = 0, 4, 8  # TimesFM 3.0 returns 9 deciles: 0.1, 0.2, ..., 0.9
-
-
-def future_dates(index: pd.DatetimeIndex, horizon: int) -> pd.DatetimeIndex:
-    """Dates for the forecast steps, using the data's own frequency.
-    Trading-day data (gaps for weekends and holidays) continues on business days."""
-    freq = pd.infer_freq(index[-12:]) or pd.infer_freq(index)
-    if freq is None:
-        typical_days = pd.Series(index[-60:]).diff().dt.days.median()
-        if typical_days <= 1.5:
-            freq = "B"  # business days; exchange holidays are not excluded
-        else:
-            step = index[-1] - index[-2]
-            return pd.DatetimeIndex([index[-1] + step * (i + 1) for i in range(horizon)])
-    return pd.date_range(index[-1], periods=horizon + 1, freq=freq)[1:]
 
 
 def load_model():
@@ -69,29 +54,6 @@ def load_model():
     from timesfm3 import TimesFM3Forecaster
 
     return TimesFM3Forecaster.from_pretrained(CHECKPOINT, device="cpu"), "PyTorch (CPU)"
-
-
-def from_dataset(dataset: str, name: str, transform: str) -> tuple[pd.Series, pd.Series]:
-    """Return (levels for the chart, model input on the chosen scale) for one series."""
-    df = store.load_dataset(dataset)
-    ids = df["series_id"].unique()
-    if name not in ids:
-        close = difflib.get_close_matches(name, ids, n=5)
-        hint = f" Did you mean: {', '.join(close)}?" if close else ""
-        sys.exit(f"'{name}' is not in dataset '{dataset}'.{hint}")
-
-    cfg = dict(etl.load_spec(dataset).get("prepare", {}))
-    cfg.update(transform=transform, min_obs=32)
-    cfg = PrepConfig(**cfg)
-    calendar = pd.DatetimeIndex(sorted(df["date"].unique())) if cfg.align and not cfg.freq else None
-    raw = df[df["series_id"] == name].set_index("date")["value"].rename(name)
-    y, info = prepare_one(raw, cfg, calendar)
-    if y is None:
-        sys.exit(f"{name} can't be used: {info['reason']}.")
-    if info.get("gaps"):
-        print(f"Note: filled {info['gaps']} missing value(s) (longest gap {info['longest_gap']}).")
-    levels = np.exp(y) if transform == "log" else y
-    return levels, y
 
 
 def main() -> None:
@@ -115,12 +77,13 @@ def main() -> None:
         print("\n".join(names) if len(names) else f"No series in {store.data_dir()}")
         return
 
-    if args.dataset:
-        levels, y = from_dataset(args.dataset, args.series, args.transform)
-        label, log_scale = f"{args.dataset}/{args.series}", args.transform == "log"
-    else:
-        levels = y = store.load_series(args.series)
-        label, log_scale = args.series, False
+    try:
+        sel = load_one(args.series, args.dataset, args.transform)
+    except (KeyError, ValueError, FileNotFoundError) as e:
+        sys.exit(e.args[0] if e.args else str(e))
+    if sel.filled:
+        print(f"Note: filled {sel.filled} missing value(s) during preparation.")
+    y, levels, label, log_scale = sel.y, sel.levels, sel.label, sel.log_scale
 
     if len(y) < 32:
         sys.exit(f"Only {len(y)} observations; TimesFM needs at least 32.")
