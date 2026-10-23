@@ -1,55 +1,39 @@
 # TrustCast
 
-TrustCast is a project for producing reliable, transparent forecasts.
+TrustCast is an independent research center that tests, adapts and explains time series
+foundation models. It runs every model (TimesFM, Chronos, Moirai, Toto, TiRex, TimeGPT)
+under the same conditions, against classical baselines, and publishes scorecards of
+forecast accuracy and how reliable each model's confidence intervals are.
 
-> _Replace this line with a one-sentence description of what TrustCast does and who it's for._
-
-## Features
-
-- Feature one — short description
-- Feature two — short description
-- Feature three — short description
-
-## Getting Started
-
-### Prerequisites
-
-- Python 3.10+ (or your project's runtime)
-- Git
-
-### Installation
+## Quick start
 
 ```bash
-git clone https://github.com/<your-username>/trustcast.git
+git clone https://github.com/drdataman01-ai/trustcast.git
 cd trustcast
+python3.12 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+
+python scripts/fetch_data.py                     # macro data from FRED
+python scripts/etl.py sp500                      # S&P 500 prices
+python scripts/forecast.py --dataset sp500 --series LMT --horizon 21 --models chronos-2 seasonal-naive
 ```
 
-### Usage
+**Joining the team?** Read [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the daily
+workflow and the rules for data and licenses.
 
-```bash
-python main.py
-```
+## What's here
 
-Describe the main command(s), inputs, and expected outputs here.
+| | |
+| --- | --- |
+| `scripts/etl.py` | Extract, clean and prepare a dataset defined in `configs/datasets.yaml` |
+| `scripts/forecast.py` | Forecast one series with several models side by side |
+| `scripts/run_scorecard.py` | Back-test models and publish a scorecard to `archive/` |
+| `src/trustcast/` | The library: data, models, evaluation, uncertainty |
 
-## Project Structure
-
-```
-trustcast/
-├── README.md
-├── requirements.txt
-└── src/
-```
-
-## Contributing
-
-Contributions are welcome. Please open an issue to discuss a change before submitting a pull request.
+Model install notes and licenses: [src/trustcast/models/README.md](src/trustcast/models/README.md).
+Data layout: [data/README.md](data/README.md).
 
 ## License
 
-This project is licensed under the MIT License — see the `LICENSE` file for details.
-
-## Contact
-
-Chris Kuo — <your-email@example.com>
+Code: MIT (see `LICENSE`). Model weights keep their own licenses; TimesFM 3.0 and
+Moirai 2.0 are for non-commercial research only.
