@@ -37,12 +37,26 @@ python scripts/run_timesfm3.py --series unemployment           # 12 months ahead
 python scripts/run_timesfm3.py --series gdp --horizon 4        # 4 quarters ahead
 ```
 
+### A series from a dataset (e.g. one stock)
+
+```bash
+python scripts/run_timesfm3.py --dataset sp500 --list                  # tickers available
+python scripts/run_timesfm3.py --dataset sp500 --series LMT --horizon 21   # about one month of trading days
+```
+
+The series is prepared with the dataset's settings in `configs/datasets.yaml`
+(trading-calendar alignment, short gaps filled) and modeled on the log scale, so the
+forecast and its interval come back as prices. `--transform none` models raw prices.
+Forecast dates are business days; exchange holidays aren't excluded.
+
 The first run downloads the model weights (about 1.3 GB) into
 `~/.cache/huggingface`. Results go to `outputs/timesfm3/` as a CSV and a chart.
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--series` | `unemployment` | File name in `data/` or `data/private/`, without `.csv` |
+| `--series` | `unemployment` | File name in `data/` (without `.csv`), or a ticker/series in `--dataset` |
+| `--dataset` | | Dataset built by `scripts/etl.py`, e.g. `sp500` |
+| `--transform` | `log` | For datasets: model on the `log` scale or raw (`none`) |
 | `--horizon` | 12 | Steps to forecast, in the data's own frequency |
 | `--context` | 512 | How many of the most recent points the model sees |
 | `--no-plot` | | Skip the chart |

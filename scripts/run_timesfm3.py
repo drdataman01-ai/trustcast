@@ -1,14 +1,22 @@
 """Run Google's TimesFM 3.0 locally (MLX on Apple Silicon, PyTorch on CPU elsewhere).
 
-Reads a series from data/<series>.csv (or data/private/<series>.csv) and reports the median forecast
-with an 80% interval (10th to 90th percentile).
+Forecasts one series and reports the median with an 80% interval (10th to 90th percentile).
 
-Usage:
+Single series in data/<name>.csv:
   python scripts/run_timesfm3.py --series unemployment --horizon 12
   python scripts/run_timesfm3.py --series gdp --horizon 4
-  python scripts/run_timesfm3.py --list                # show series in data/
 
-Fill data/ first with: python scripts/fetch_data.py
+One series from a dataset built by scripts/etl.py (e.g. a stock in data/sp500.parquet):
+  python scripts/run_timesfm3.py --dataset sp500 --series LMT --horizon 21
+
+  For datasets, the series is prepared with the dataset's settings from
+  configs/datasets.yaml (calendar alignment, gap filling), then modeled on the log
+  scale (--transform log, the default) so the forecast and its interval come back
+  as prices exactly. --transform none models raw prices.
+
+  python scripts/run_timesfm3.py --list                  # single series in data/
+  python scripts/run_timesfm3.py --dataset sp500 --list  # series in a dataset
+
 Outputs go to outputs/timesfm3/.
 
 TimesFM 3.0 weights are under Google's timesfm-non-commercial-license-v1.0:
@@ -18,6 +26,7 @@ research and non-production use only (research lab, not the commercial arm).
 from __future__ import annotations
 
 import argparse
+import difflib
 import platform
 import sys
 import time
@@ -26,7 +35,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from trustcast.data import store
+from trustcast.data import etl, store
+from trustcast.data.prepare import PrepConfig, prepare_one
 
 CHECKPOINT = "google/timesfm-3.0-pytorch"
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,11 +44,16 @@ Q10, Q50, Q90 = 0, 4, 8  # TimesFM 3.0 returns 9 deciles: 0.1, 0.2, ..., 0.9
 
 
 def future_dates(index: pd.DatetimeIndex, horizon: int) -> pd.DatetimeIndex:
-    """Dates for the forecast steps, using the data's own frequency."""
+    """Dates for the forecast steps, using the data's own frequency.
+    Trading-day data (gaps for weekends and holidays) continues on business days."""
     freq = pd.infer_freq(index[-12:]) or pd.infer_freq(index)
     if freq is None:
-        step = index[-1] - index[-2]
-        return pd.DatetimeIndex([index[-1] + step * (i + 1) for i in range(horizon)])
+        typical_days = pd.Series(index[-60:]).diff().dt.days.median()
+        if typical_days <= 1.5:
+            freq = "B"  # business days; exchange holidays are not excluded
+        else:
+            step = index[-1] - index[-2]
+            return pd.DatetimeIndex([index[-1] + step * (i + 1) for i in range(horizon)])
     return pd.date_range(index[-1], periods=horizon + 1, freq=freq)[1:]
 
 
@@ -56,9 +71,36 @@ def load_model():
     return TimesFM3Forecaster.from_pretrained(CHECKPOINT, device="cpu"), "PyTorch (CPU)"
 
 
+def from_dataset(dataset: str, name: str, transform: str) -> tuple[pd.Series, pd.Series]:
+    """Return (levels for the chart, model input on the chosen scale) for one series."""
+    df = store.load_dataset(dataset)
+    ids = df["series_id"].unique()
+    if name not in ids:
+        close = difflib.get_close_matches(name, ids, n=5)
+        hint = f" Did you mean: {', '.join(close)}?" if close else ""
+        sys.exit(f"'{name}' is not in dataset '{dataset}'.{hint}")
+
+    cfg = dict(etl.load_spec(dataset).get("prepare", {}))
+    cfg.update(transform=transform, min_obs=32)
+    cfg = PrepConfig(**cfg)
+    calendar = pd.DatetimeIndex(sorted(df["date"].unique())) if cfg.align and not cfg.freq else None
+    raw = df[df["series_id"] == name].set_index("date")["value"].rename(name)
+    y, info = prepare_one(raw, cfg, calendar)
+    if y is None:
+        sys.exit(f"{name} can't be used: {info['reason']}.")
+    if info.get("gaps"):
+        print(f"Note: filled {info['gaps']} missing value(s) (longest gap {info['longest_gap']}).")
+    levels = np.exp(y) if transform == "log" else y
+    return levels, y
+
+
 def main() -> None:
     p = argparse.ArgumentParser(description="Forecast one series with TimesFM 3.0.")
-    p.add_argument("--series", default="unemployment", help="File name in data/ or data/private/, without .csv")
+    p.add_argument("--series", default="unemployment",
+                   help="Series name: a file in data/ (without .csv), or a series_id in --dataset")
+    p.add_argument("--dataset", help="Dataset in data/ built by scripts/etl.py, e.g. sp500")
+    p.add_argument("--transform", choices=["log", "none"], default="log",
+                   help="Scale to model a dataset series on (default: log)")
     p.add_argument("--horizon", type=int, default=12, help="Steps to forecast (default: 12)")
     p.add_argument("--context", type=int, default=512, help="Most recent points to use (default: 512)")
     p.add_argument("--list", action="store_true", help="List the series available and exit")
@@ -66,17 +108,26 @@ def main() -> None:
     args = p.parse_args()
 
     if args.list:
-        names = store.available()
-        print("\n".join(names) if names else f"No series in {store.data_dir()}")
+        if args.dataset:
+            names = sorted(store.load_dataset(args.dataset)["series_id"].unique())
+        else:
+            names = store.available()
+        print("\n".join(names) if len(names) else f"No series in {store.data_dir()}")
         return
 
-    series = store.load_series(args.series)
-    if len(series) < 32:
-        sys.exit(f"Only {len(series)} observations; TimesFM needs at least 32.")
-    context = series.iloc[-args.context:].astype("float32")
-    print(f"{args.series}: {len(series)} observations, "
-          f"{series.index[0]:%Y-%m-%d} to {series.index[-1]:%Y-%m-%d}")
-    print(f"Using the last {len(context)} as context; forecasting {args.horizon} steps.")
+    if args.dataset:
+        levels, y = from_dataset(args.dataset, args.series, args.transform)
+        label, log_scale = f"{args.dataset}/{args.series}", args.transform == "log"
+    else:
+        levels = y = store.load_series(args.series)
+        label, log_scale = args.series, False
+
+    if len(y) < 32:
+        sys.exit(f"Only {len(y)} observations; TimesFM needs at least 32.")
+    context = y.iloc[-args.context:].astype("float32")
+    print(f"{label}: {len(y)} observations, {y.index[0]:%Y-%m-%d} to {y.index[-1]:%Y-%m-%d}")
+    print(f"Using the last {len(context)} as context; forecasting {args.horizon} steps"
+          f"{' on the log scale' if log_scale else ''}.")
 
     t0 = time.time()
     model, backend = load_model()
@@ -87,16 +138,17 @@ def main() -> None:
     print(f"Forecast took {time.time() - t0:.2f}s\n")
 
     q = np.asarray(out.quantiles)  # (horizon, 9)
-    result = pd.DataFrame(
-        {"q10": q[:, Q10], "median": np.asarray(out.forecast), "q90": q[:, Q90]},
-        index=future_dates(series.index, args.horizon),
-    )
+    cols = {"q10": q[:, Q10], "median": np.asarray(out.forecast), "q90": q[:, Q90]}
+    if log_scale:  # exp is monotonic, so quantiles of log price map exactly to quantiles of price
+        cols = {k: np.exp(v) for k, v in cols.items()}
+    result = pd.DataFrame(cols, index=future_dates(y.index, args.horizon))
     result.index.name = "date"
-    print(result.round(3).to_string())
+    print(f"Last value: {levels.iloc[-1]:.2f} on {levels.index[-1]:%Y-%m-%d}")
+    print(result.round(2).to_string())
 
     out_dir = ROOT / "outputs" / "timesfm3"
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = f"{args.series}_h{args.horizon}"
+    stem = f"{label.replace('/', '_')}_h{args.horizon}"
     result.to_csv(out_dir / f"{stem}.csv")
     print(f"\nSaved {out_dir / f'{stem}.csv'}")
 
@@ -106,14 +158,14 @@ def main() -> None:
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
 
-        hist = series.iloc[-max(4 * args.horizon, 60):]
+        hist = levels.iloc[-max(4 * args.horizon, 120):]
         fig, ax = plt.subplots(figsize=(10, 4.5))
-        ax.plot(hist.index, hist.values, color="#13212B", lw=1.8, label="History")
+        ax.plot(hist.index, hist.values, color="#13212B", lw=1.6, label="History")
         ax.fill_between(result.index, result["q10"], result["q90"], color="#0E6E6B",
                         alpha=0.25, lw=0, label="80% interval (q10 to q90)")
         ax.plot(result.index, result["median"], color="#C98A1E", lw=2.2, label="Median forecast")
-        ax.axvline(series.index[-1], color="#8A9AA2", ls=":", lw=1)
-        ax.set_title(f"TimesFM 3.0 forecast: {args.series}")
+        ax.axvline(levels.index[-1], color="#8A9AA2", ls=":", lw=1)
+        ax.set_title(f"TimesFM 3.0 forecast: {label}")
         ax.legend(frameon=False, loc="upper left")
         ax.spines[["top", "right"]].set_visible(False)
         fig.tight_layout()
