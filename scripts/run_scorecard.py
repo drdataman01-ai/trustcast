@@ -2,7 +2,7 @@
 
 Usage: python scripts/run_scorecard.py --domain macro --models seasonal-naive arima chronos-2
 
-Steps: load each series (as known at each origin) -> back-test every model under
+Steps: load each series from data/<domain>/ (as known at each origin) -> back-test every model under
 the same conditions -> summarize -> save to archive/<domain>/<YYYY-MM>/.
 """
 
@@ -12,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 import yaml
 
-from trustcast.data.sources import fred
+from trustcast.data import store
 from trustcast.evaluation.backtest import rolling_origin
 from trustcast.evaluation.scorecard import publish, summarize
 from trustcast.models import get_model
@@ -34,7 +34,7 @@ def main():
 
     results = []
     for series, spec in domain["series"].items():
-        y = fred.latest(spec["fred_id"]).dropna().values
+        y = store.load_series(args.domain, series).values  # from data/<domain>/<series>.csv
         # TODO: pass history_at=... built from data.vintages for real-time scoring
         for h in spec["horizons"]:
             for name in args.models:

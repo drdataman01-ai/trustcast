@@ -54,3 +54,18 @@ def test_ensemble_and_calibration():
 def test_license_guard():
     with pytest.raises(LicenseError):
         get_model("moirai-2.0", mode="commercial")
+
+
+def test_data_store_roundtrip(tmp_path, monkeypatch):
+    import pandas as pd
+
+    from trustcast.data import store
+
+    monkeypatch.setenv("TRUSTCAST_DATA", str(tmp_path))
+    s = pd.Series([1.0, 2.0, 3.0], index=pd.date_range("2020-01-01", periods=3, freq="MS"))
+    store.save_series(s, "macro", "demo")
+    back = store.load_series("macro", "demo")
+    assert list(back.values) == [1.0, 2.0, 3.0]
+    assert store.available("macro") == ["demo"]
+    with pytest.raises(FileNotFoundError):
+        store.load_series("macro", "missing")

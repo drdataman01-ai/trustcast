@@ -1,0 +1,22 @@
+# Private or large data
+data/private/
+data/**/*.parquet
+data/**/*.zip
+
+# Secrets
+.env
+
+# Model and run outputs
+outputs/
+
+# Python
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
