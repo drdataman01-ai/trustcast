@@ -1,3 +1,6 @@
+# This repo's own code (src/trustcast), installed in editable mode
+-e .
+
 # Core
 numpy
 pandas
