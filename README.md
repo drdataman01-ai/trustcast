@@ -27,6 +27,7 @@ workflow and the rules for data and licenses.
 | --- | --- |
 | `scripts/etl.py` | Extract, clean and prepare a dataset defined in `configs/datasets.yaml` |
 | `scripts/forecast.py` | Forecast one series with several models side by side |
+| `scripts/backtest.py` | Walk-forward back-test: e.g. 21-day forecasts, origin moved a week at a time, scored against a random walk |
 | `scripts/run_scorecard.py` | Back-test models and publish a scorecard to `archive/` |
 | `src/trustcast/` | The library: data, models, evaluation, uncertainty |
 

@@ -119,3 +119,44 @@ def test_prepare_keeps_mixed_frequencies():
                       "value": np.arange(40.0)})
     prepared = prepare(pd.concat([m, q]), {"fill": "none", "min_obs": 32})
     assert len(prepared.series["gdp"]) == 40 and len(prepared.series["cpi"]) == 60
+
+
+def test_walkforward_no_lookahead_and_calibration():
+    import pandas as pd
+    from statistics import NormalDist
+
+    from trustcast.evaluation.walkforward import (
+        BacktestConfig, origin_positions, run_backtest, score_rows, summarize)
+    from trustcast.models.base import Forecast, ForecastModel
+
+    idx = pd.bdate_range("2019-01-01", periods=900)
+    cfg = BacktestConfig(horizon=21, step=5, context=256, min_history=252)
+
+    class Spy(ForecastModel):
+        name, seen = "spy", []
+
+        def predict(self, y, h, quantiles, freq=None, covariates=None):
+            self.seen.append(y[-1])
+            return Forecast(np.zeros(h), {q: np.zeros(h) for q in quantiles}, "spy")
+
+    spy = Spy()
+    run_backtest({"spy": spy}, pd.Series(np.arange(900.0), index=idx), cfg, progress=False)
+    positions = origin_positions(idx, cfg)
+    assert spy.seen == [t - 1 for t in positions]          # never sees the origin or later
+    assert all(np.diff(positions) == 5) and positions[-1] == 900 - 21
+
+    rng = np.random.default_rng(0)
+    sig = 0.015
+    rw = pd.Series(np.cumsum(rng.normal(0, sig, 900)), index=idx)
+    nd = NormalDist()
+
+    class Gauss(ForecastModel):
+        name = "gauss"
+
+        def predict(self, y, h, quantiles, freq=None, covariates=None):
+            k = np.sqrt(np.arange(1, h + 1)) * sig
+            return Forecast(np.full(h, y[-1]), {q: y[-1] + nd.inv_cdf(q) * k for q in quantiles}, "gauss")
+
+    scored = score_rows(run_backtest({"gauss": Gauss()}, rw, cfg, progress=False), cfg.levels)
+    s = summarize(scored, cfg.levels, ["model"]).iloc[0]
+    assert abs(s["coverage_80"] - 0.8) < 0.08 and abs(s["coverage_95"] - 0.95) < 0.05
