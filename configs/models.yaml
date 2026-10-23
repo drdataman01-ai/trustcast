@@ -1,0 +1,68 @@
+# Model roster for the evaluation hub.
+# - hf_id: Hugging Face repo ID (confirm on the model card before first use)
+# - revision: pin to a commit hash so every teammate gets identical weights
+# - commercial_ok: false = research lab only; refused when TRUSTCAST_MODE=commercial
+# Licenses as listed in the proposal (Appendix A); re-check on each new release.
+
+foundation:
+  timesfm-2.5:
+    developer: Google Research
+    adapter: timesfm
+    hf_id: google/timesfm-2.5-200m-pytorch   # confirm
+    revision: null
+    license: Apache-2.0
+    commercial_ok: true
+
+  timesfm-3.0:
+    developer: Google Research
+    adapter: timesfm
+    hf_id: TODO
+    revision: null
+    license: non-commercial, non-production
+    commercial_ok: false
+
+  chronos-2:
+    developer: Amazon
+    adapter: chronos
+    hf_id: amazon/chronos-2                  # confirm
+    revision: null
+    license: Apache-2.0
+    commercial_ok: true
+
+  moirai-2.0:
+    developer: Salesforce
+    adapter: moirai
+    hf_id: TODO
+    revision: null
+    license: CC-BY-NC-4.0
+    commercial_ok: false
+
+  toto-2.0:
+    developer: Datadog
+    adapter: toto
+    hf_id: TODO
+    revision: null
+    license: Apache-2.0
+    commercial_ok: true
+
+  tirex-2:
+    developer: NX-AI
+    adapter: tirex
+    hf_id: TODO
+    revision: null
+    license: Apache-2.0
+    commercial_ok: true
+
+  timegpt:
+    developer: Nixtla
+    adapter: timegpt
+    hf_id: null                              # API only
+    revision: null
+    license: proprietary (API)
+    commercial_ok: true                      # subject to Nixtla's terms
+
+baselines:
+  arima:          {adapter: classical, method: auto_arima}
+  ets:            {adapter: classical, method: auto_ets}
+  seasonal-naive: {adapter: classical, method: seasonal_naive}
+  gdpnow:         {adapter: nowcast, source: atlanta_fed, series: [gdp]}

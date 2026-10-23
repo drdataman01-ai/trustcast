@@ -1,0 +1,16 @@
+# First domain: macroeconomic indicators (US, from FRED / ALFRED vintages)
+domain: macro
+source: fred
+
+series:
+  gdp:               {fred_id: GDPC1,    freq: Q, horizons: [1, 2, 4, 8]}
+  cpi:               {fred_id: CPIAUCSL, freq: M, horizons: [1, 3, 6, 12]}
+  unemployment:      {fred_id: UNRATE,   freq: M, horizons: [1, 3, 6, 12]}
+  retail_sales:      {fred_id: RSAFS,    freq: M, horizons: [1, 3, 6, 12]}
+  industrial_prod:   {fred_id: INDPRO,   freq: M, horizons: [1, 3, 6, 12]}
+
+backtest:
+  start: "2010-01-01"
+  end: null                    # up to the latest available release
+
+challenges: [short_histories, data_revisions, regime_breaks]

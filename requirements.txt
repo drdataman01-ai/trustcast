@@ -1,0 +1,26 @@
+# Core
+numpy
+pandas
+pyyaml
+python-dotenv
+huggingface_hub
+
+# Classical baselines
+statsforecast
+
+# Foundation models (install the ones you use)
+torch
+chronos-forecasting
+# timesfm
+# uni2ts          # Moirai
+# tirex-ts        # TiRex
+# nixtla          # TimeGPT API client
+
+# Data sources
+fredapi
+
+# Dev
+pytest
+
+# After your first working install, pin exact versions for the whole team:
+#   pip freeze > requirements.lock.txt
