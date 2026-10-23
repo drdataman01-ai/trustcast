@@ -1,4 +1,4 @@
-"""Download a domain's series into data/<domain>/.
+"""Download a domain's series into data/.
 
 Usage:
   python scripts/fetch_data.py --domain macro              # latest values, no API key needed
@@ -27,7 +27,7 @@ def main():
     domain = yaml.safe_load(open(ROOT / "configs" / "domains" / f"{args.domain}.yaml"))
     if domain.get("source") != "fred":
         raise SystemExit(f"Only FRED downloads are set up so far; put {args.domain} files "
-                         f"in {store.data_dir() / args.domain} by hand.")
+                         f"in {store.data_dir()} by hand.")
 
     if args.vintages:
         from dotenv import load_dotenv
@@ -37,11 +37,11 @@ def main():
 
     for name, spec in domain["series"].items():
         s = store.read_csv_series(FRED_CSV.format(spec["fred_id"]))
-        path = store.save_series(s, args.domain, name)
+        path = store.save_series(s, name)
         print(f"{name:<16} {len(s):>5} obs  {s.index[0]:%Y-%m-%d} to {s.index[-1]:%Y-%m-%d}  -> {path}")
         if args.vintages:
             v = fred.all_vintages(spec["fred_id"])
-            print(f"{'':<16} {len(v):>5} releases -> {store.save_vintages(v, args.domain, name)}")
+            print(f"{'':<16} {len(v):>5} releases -> {store.save_vintages(v, name)}")
 
 
 if __name__ == "__main__":

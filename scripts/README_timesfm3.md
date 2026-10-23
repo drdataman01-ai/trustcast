@@ -1,6 +1,6 @@
 # Run TimesFM 3.0 locally on a Mac
 
-`run_timesfm3.py` forecasts one series from `data/` with Google's TimesFM 3.0 and
+`run_timesfm3.py` forecasts one series from `data/` (or `data/private/`) with Google's TimesFM 3.0 and
 reports the median forecast with an 80% interval (10th to 90th percentile). On Apple
 Silicon (M1 and later) it uses the MLX backend, which runs natively without PyTorch.
 
@@ -23,15 +23,16 @@ because the MLX backend may not be in the PyPI release yet.
 ## 2. Get the data
 
 ```bash
-python scripts/fetch_data.py --domain macro
+python scripts/fetch_data.py
 ```
 
-This saves the macro series to `data/macro/` (see `data/README.md`).
+This saves the macro series to `data/` (see `data/README.md`). Your own series go
+there too, as `data/<name>.csv`.
 
 ## 3. Run
 
 ```bash
-python scripts/run_timesfm3.py --list                          # what's in data/macro/
+python scripts/run_timesfm3.py --list                          # what's in data/
 python scripts/run_timesfm3.py --series unemployment           # 12 months ahead
 python scripts/run_timesfm3.py --series gdp --horizon 4        # 4 quarters ahead
 ```
@@ -41,8 +42,7 @@ The first run downloads the model weights (about 1.3 GB) into
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `--domain` | `macro` | Folder under `data/` |
-| `--series` | `unemployment` | File name in `data/<domain>/`, without `.csv` |
+| `--series` | `unemployment` | File name in `data/` or `data/private/`, without `.csv` |
 | `--horizon` | 12 | Steps to forecast, in the data's own frequency |
 | `--context` | 512 | How many of the most recent points the model sees |
 | `--no-plot` | | Skip the chart |

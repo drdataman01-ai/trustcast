@@ -63,9 +63,10 @@ def test_data_store_roundtrip(tmp_path, monkeypatch):
 
     monkeypatch.setenv("TRUSTCAST_DATA", str(tmp_path))
     s = pd.Series([1.0, 2.0, 3.0], index=pd.date_range("2020-01-01", periods=3, freq="MS"))
-    store.save_series(s, "macro", "demo")
-    back = store.load_series("macro", "demo")
-    assert list(back.values) == [1.0, 2.0, 3.0]
-    assert store.available("macro") == ["demo"]
+    store.save_series(s, "demo")
+    store.save_series(s * 2, "client", private=True)
+    assert list(store.load_series("demo").values) == [1.0, 2.0, 3.0]
+    assert list(store.load_series("client").values) == [2.0, 4.0, 6.0]
+    assert store.available() == ["demo", "private/client"]
     with pytest.raises(FileNotFoundError):
-        store.load_series("macro", "missing")
+        store.load_series("missing")

@@ -1,14 +1,14 @@
 """Run Google's TimesFM 3.0 locally (MLX on Apple Silicon, PyTorch on CPU elsewhere).
 
-Reads a series from data/<domain>/<series>.csv and reports the median forecast
+Reads a series from data/<series>.csv (or data/private/<series>.csv) and reports the median forecast
 with an 80% interval (10th to 90th percentile).
 
 Usage:
   python scripts/run_timesfm3.py --series unemployment --horizon 12
-  python scripts/run_timesfm3.py --domain macro --series gdp --horizon 4
-  python scripts/run_timesfm3.py --list                # show series in data/<domain>/
+  python scripts/run_timesfm3.py --series gdp --horizon 4
+  python scripts/run_timesfm3.py --list                # show series in data/
 
-Fill data/ first with: python scripts/fetch_data.py --domain macro
+Fill data/ first with: python scripts/fetch_data.py
 Outputs go to outputs/timesfm3/.
 
 TimesFM 3.0 weights are under Google's timesfm-non-commercial-license-v1.0:
@@ -58,8 +58,7 @@ def load_model():
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Forecast one series with TimesFM 3.0.")
-    p.add_argument("--domain", default="macro", help="Folder under data/ (default: macro)")
-    p.add_argument("--series", default="unemployment", help="File name in data/<domain>/, without .csv")
+    p.add_argument("--series", default="unemployment", help="File name in data/ or data/private/, without .csv")
     p.add_argument("--horizon", type=int, default=12, help="Steps to forecast (default: 12)")
     p.add_argument("--context", type=int, default=512, help="Most recent points to use (default: 512)")
     p.add_argument("--list", action="store_true", help="List the series available and exit")
@@ -67,15 +66,15 @@ def main() -> None:
     args = p.parse_args()
 
     if args.list:
-        names = store.available(args.domain)
-        print("\n".join(names) if names else f"No series in {store.data_dir() / args.domain}")
+        names = store.available()
+        print("\n".join(names) if names else f"No series in {store.data_dir()}")
         return
 
-    series = store.load_series(args.domain, args.series)
+    series = store.load_series(args.series)
     if len(series) < 32:
         sys.exit(f"Only {len(series)} observations; TimesFM needs at least 32.")
     context = series.iloc[-args.context:].astype("float32")
-    print(f"{args.domain}/{args.series}: {len(series)} observations, "
+    print(f"{args.series}: {len(series)} observations, "
           f"{series.index[0]:%Y-%m-%d} to {series.index[-1]:%Y-%m-%d}")
     print(f"Using the last {len(context)} as context; forecasting {args.horizon} steps.")
 
@@ -97,7 +96,7 @@ def main() -> None:
 
     out_dir = ROOT / "outputs" / "timesfm3"
     out_dir.mkdir(parents=True, exist_ok=True)
-    stem = f"{args.domain}_{args.series}_h{args.horizon}"
+    stem = f"{args.series}_h{args.horizon}"
     result.to_csv(out_dir / f"{stem}.csv")
     print(f"\nSaved {out_dir / f'{stem}.csv'}")
 
@@ -114,7 +113,7 @@ def main() -> None:
                         alpha=0.25, lw=0, label="80% interval (q10 to q90)")
         ax.plot(result.index, result["median"], color="#C98A1E", lw=2.2, label="Median forecast")
         ax.axvline(series.index[-1], color="#8A9AA2", ls=":", lw=1)
-        ax.set_title(f"TimesFM 3.0 forecast: {args.domain}/{args.series}")
+        ax.set_title(f"TimesFM 3.0 forecast: {args.series}")
         ax.legend(frameon=False, loc="upper left")
         ax.spines[["top", "right"]].set_visible(False)
         fig.tight_layout()
