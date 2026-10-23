@@ -34,9 +34,31 @@ def get_model(name: str, mode: str | None = None, device: str = "cpu") -> Foreca
     adapter = spec["adapter"]
     if adapter == "classical":
         return SeasonalNaive() if spec["method"] == "seasonal_naive" else StatsForecastModel(spec["method"])
+    common = dict(revision=spec.get("revision"), device=device,
+                  commercial_ok=spec.get("commercial_ok", True), name=name)
     if adapter == "chronos":
         from .chronos import Chronos
 
-        return Chronos(spec["hf_id"], spec.get("revision"), device,
-                       spec.get("commercial_ok", True), name)
+        return Chronos(spec["hf_id"], **common)
+    if adapter == "timesfm":
+        from .timesfm import TimesFM
+
+        return TimesFM(spec["hf_id"], version=spec.get("version", "2.5"), **common)
+    if adapter == "tirex":
+        from .tirex import TiRex
+
+        return TiRex(spec["hf_id"], **common)
+    if adapter == "toto":
+        from .toto import Toto
+
+        return Toto(spec["hf_id"], **common)
+    if adapter == "moirai":
+        from .moirai import Moirai
+
+        return Moirai(spec["hf_id"], **common)
+    if adapter == "timegpt":
+        from .timegpt import TimeGPT
+
+        return TimeGPT(spec.get("api_model", "timegpt-2.1"),
+                       commercial_ok=common["commercial_ok"], name=name)
     raise NotImplementedError(f"Adapter '{adapter}' not written yet (see adapters_todo.py).")

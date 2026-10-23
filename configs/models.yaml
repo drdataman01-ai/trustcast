@@ -1,65 +1,76 @@
 # Model roster for the evaluation hub.
-# - hf_id: Hugging Face repo ID (confirm on the model card before first use)
+# - hf_id: Hugging Face repo ID
 # - revision: pin to a commit hash so every teammate gets identical weights
 # - commercial_ok: false = research lab only; refused when TRUSTCAST_MODE=commercial
+# - install: what to pip install for this model (see src/trustcast/models/README.md)
 # Licenses as listed in the proposal (Appendix A); re-check on each new release.
 
 foundation:
   timesfm-2.5:
     developer: Google Research
     adapter: timesfm
-    hf_id: google/timesfm-2.5-200m-pytorch   # confirm
+    version: "2.5"
+    hf_id: google/timesfm-2.5-200m-pytorch
     revision: null
     license: Apache-2.0
     commercial_ok: true
+    install: timesfm (from GitHub)
 
   timesfm-3.0:
     developer: Google Research
     adapter: timesfm
-    hf_id: TODO
+    version: "3.0"
+    hf_id: google/timesfm-3.0-pytorch
     revision: null
     license: non-commercial, non-production
     commercial_ok: false
+    install: timesfm[mlx] (from GitHub)
 
   chronos-2:
     developer: Amazon
     adapter: chronos
-    hf_id: amazon/chronos-2                  # confirm
+    hf_id: amazon/chronos-2
     revision: null
     license: Apache-2.0
     commercial_ok: true
+    install: chronos-forecasting
 
   moirai-2.0:
     developer: Salesforce
     adapter: moirai
-    hf_id: TODO
+    hf_id: Salesforce/moirai-2.0-R-small
     revision: null
     license: CC-BY-NC-4.0
     commercial_ok: false
+    install: uni2ts (separate environment, Python 3.11)
 
   toto-2.0:
     developer: Datadog
     adapter: toto
-    hf_id: TODO
+    hf_id: Datadog/Toto-2.0-313m        # also -4m, -22m, -1B, -2.5B
     revision: null
     license: Apache-2.0
     commercial_ok: true
+    install: toto-models (Python >= 3.12)
 
   tirex-2:
     developer: NX-AI
     adapter: tirex
-    hf_id: TODO
+    hf_id: NX-AI/TiRex-2
     revision: null
     license: Apache-2.0
     commercial_ok: true
+    install: tirex-2
 
   timegpt:
     developer: Nixtla
     adapter: timegpt
-    hf_id: null                              # API only
+    hf_id: null                          # hosted API
+    api_model: timegpt-2.1
     revision: null
     license: proprietary (API)
-    commercial_ok: true                      # subject to Nixtla's terms
+    commercial_ok: true                  # subject to Nixtla's terms
+    install: nixtla, plus NIXTLA_API_KEY in .env
 
 baselines:
   arima:          {adapter: classical, method: auto_arima}

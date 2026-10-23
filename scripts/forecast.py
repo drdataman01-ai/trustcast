@@ -5,9 +5,10 @@ Usage:
   python scripts/forecast.py --dataset sp500 --series LMT --horizon 21 --models chronos-2 arima seasonal-naive
   python scripts/forecast.py --series unemployment --horizon 12 --models chronos-2 ets
 
-Models available now: chronos-2, arima, ets, seasonal-naive (for daily stock data,
-seasonal-naive is the random walk: tomorrow = today). TimesFM 3.0 runs through
-scripts/run_timesfm3.py until its adapter is added to the registry.
+Models: timesfm-2.5, timesfm-3.0, chronos-2, moirai-2.0, toto-2.0, tirex-2, timegpt,
+arima, ets, seasonal-naive (for daily stock data, seasonal-naive is the random walk:
+tomorrow = today). Install notes: src/trustcast/models/README.md. A model whose
+library isn't installed is skipped with a message.
 
 Each model returns the median and an 80% interval (10th to 90th percentile). With
 --dataset, models run on log prices and results are converted back to prices.
@@ -25,7 +26,7 @@ import numpy as np
 import pandas as pd
 
 from trustcast.data.select import future_dates, load_one, short_freq
-from trustcast.models import get_model
+from trustcast.models import LicenseError, get_model
 
 ROOT = Path(__file__).resolve().parents[1]
 QUANTILES = [0.1, 0.5, 0.9]
@@ -67,8 +68,16 @@ def main() -> None:
         except NotImplementedError as e:
             print(f"Skipping {name}: {e}")
             continue
+        except LicenseError as e:
+            print(f"Skipping {name}: {e}")
+            continue
         t0 = time.time()
-        fc = model.predict(y.to_numpy(), args.horizon, QUANTILES, freq=freq)
+        try:
+            fc = model.predict(y.to_numpy(), args.horizon, QUANTILES, freq=freq)
+        except ImportError as e:
+            print(f"Skipping {name}: its library isn't installed ({e.name}). "
+                  "See src/trustcast/models/README.md\n")
+            continue
         cols = {"q10": fc.quantiles[0.1], "median": fc.quantiles[0.5], "q90": fc.quantiles[0.9]}
         if sel.log_scale:  # exp is monotonic: quantiles of log price -> quantiles of price
             cols = {k: np.exp(v) for k, v in cols.items()}

@@ -1,11 +1,8 @@
-"""Adapters still to write. Each should subclass ForecastModel (see base.py)
-and follow chronos.py: load weights lazily by hf_id + pinned revision, and
-return a Forecast with quantiles.
+"""Adapters still to write. Each should subclass ForecastModel (see base.py),
+load weights lazily by hf_id + pinned revision, and return a Forecast with
+quantiles (use base.from_quantile_grid for models with a fixed quantile grid).
 
-- timesfm.py  -> TimesFM 2.5 (Apache-2.0) and 3.0 (research only)
-- moirai.py   -> Moirai 2.0 (CC-BY-NC-4.0, research only)
-- toto.py     -> Toto 2.0
-- tirex.py    -> TiRex-2
-- timegpt.py  -> TimeGPT via Nixtla API (key in .env)
 - nowcasts.py -> GDPNow and other published nowcasts, as baselines
+
+Done: chronos.py, timesfm.py (2.5 and 3.0), moirai.py, toto.py, tirex.py, timegpt.py
 """

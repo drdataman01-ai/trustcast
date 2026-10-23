@@ -44,3 +44,34 @@ class ForecastModel:
         covariates: dict | None = None,
     ) -> Forecast:
         raise NotImplementedError
+
+
+DECILES = (0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
+
+
+def from_quantile_grid(grid: np.ndarray, levels, quantiles: list[float], model: str) -> Forecast:
+    """Build a Forecast from a model's native quantile grid.
+
+    grid:   shape (horizon, len(levels)), the model's own quantile forecasts
+    levels: the quantile levels of grid's columns, e.g. DECILES
+    quantiles: the levels the caller asked for
+
+    Levels inside the model's range are interpolated. Levels outside it (e.g. 0.025 or
+    0.975 from a deciles-only model) are extended with a normal tail fitted to the
+    outermost levels; the scorecard's conformal step then checks and corrects the width.
+    """
+    from statistics import NormalDist
+
+    grid = np.sort(np.asarray(grid, dtype=float), axis=1)  # guard against quantile crossing
+    levels = np.asarray(levels, dtype=float)
+    nd = NormalDist()
+    lo, hi = levels[0], levels[-1]
+    med = np.array([np.interp(0.5, levels, row) for row in grid])
+    sigma = (grid[:, -1] - grid[:, 0]) / (nd.inv_cdf(hi) - nd.inv_cdf(lo))
+    out = {}
+    for q in quantiles:
+        if lo <= q <= hi:
+            out[q] = np.array([np.interp(q, levels, row) for row in grid])
+        else:
+            out[q] = med + nd.inv_cdf(q) * sigma
+    return Forecast(mean=med, quantiles=out, model=model)

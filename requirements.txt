@@ -11,13 +11,14 @@ huggingface_hub
 # Classical baselines
 statsforecast
 
-# Foundation models (install the ones you use)
+# Foundation models (install the ones you use; see src/trustcast/models/README.md)
 torch
 chronos-forecasting
-# timesfm
-# uni2ts          # Moirai
-# tirex-ts        # TiRex
-# nixtla          # TimeGPT API client
+# timesfm[mlx] @ git+https://github.com/google-research/timesfm.git@e51928e27119cb17bebc005be2696b75e0a9e688
+# tirex-2         # TiRex-2
+# toto-models     # Toto 2.0 (Python 3.12+)
+# nixtla          # TimeGPT API client (needs NIXTLA_API_KEY)
+# uni2ts          # Moirai 2.0: separate Python 3.11 environment, conflicts with the rest
 
 # Data sources and storage
 fredapi
