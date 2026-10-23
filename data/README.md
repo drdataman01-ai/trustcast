@@ -18,6 +18,18 @@ A program asks for a series by name (`unemployment`) and gets `data/unemployment
 or `data/private/unemployment.csv` if there's no public file with that name. Keep
 names unique across both.
 
+## Datasets (many series in one file)
+
+Larger collections, such as S&P 500 prices, are stored as one long table,
+`data/<name>.parquet` with columns `series_id, date, value`, built by the ETL pipeline:
+
+```bash
+python scripts/etl.py sp500                  # extract, clean, save, prepare
+python scripts/etl.py sp500 --import-pickle ~/Downloads/data/stocks.pkl
+```
+
+Datasets are defined in `configs/datasets.yaml` and are not committed (they can be rebuilt).
+
 ## Filling it
 
 ```bash

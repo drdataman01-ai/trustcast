@@ -1,0 +1,51 @@
+# Datasets for the ETL pipeline: python scripts/etl.py <name>
+#
+# Each entry: where the data comes from (extract), and how to prepare it for models.
+# Output: data/<name>.parquet (or data/private/ when private: true), long format:
+#   series_id, date, value
+#
+# prepare options (see src/trustcast/data/prepare.py):
+#   freq:       null keeps observed dates; "B", "MS", "QS" etc. put series on a regular calendar
+#   align:      with freq null, put every series on the dates seen across the dataset
+#               (for stocks: the trading calendar), so missing days count as gaps
+#   fill:       ffill | interpolate | none, for gaps up to fill_limit steps
+#   transform:  none | log | log_return | pct_change | diff
+#   clip_mad:   clip transformed values beyond median ± k·MAD (null = off)
+#   min_obs:    drop series shorter than this
+#   end:        last date to use (null = all)
+
+sp500:
+  source: yahoo
+  tickers: sp500            # current members from Wikipedia, or a list: [AAPL, MSFT]
+  start: "2020-01-01"
+  field: Close              # adjusted close (auto_adjust)
+  # import_pickle: /Users/chriskuo/Downloads/data/stocks.pkl   # reuse an earlier download
+  private: false
+  prepare:
+    freq: null              # trading days, no weekend/holiday rows
+    align: true             # every ticker on the shared trading calendar, so halts show as gaps
+    fill: ffill
+    fill_limit: 5
+    transform: log_return
+    clip_mad: null
+    min_obs: 250            # about one trading year
+
+macro:
+  source: fred
+  domain: macro             # series list from configs/domains/macro.yaml
+  private: false
+  prepare:
+    freq: null              # monthly and quarterly series keep their own dates
+    fill: none
+    transform: none
+    min_obs: 32
+
+# Example: your own file
+# my_sales:
+#   source: csv
+#   path: data/private/sales_raw.csv
+#   date_col: date          # wide file: every other column becomes a series
+#   # id_col: store_id      # long file: also give id_col and value_col
+#   # value_col: sales
+#   private: true
+#   prepare: {freq: W, fill: interpolate, fill_limit: 2, transform: none, min_obs: 52}

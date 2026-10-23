@@ -1,6 +1,7 @@
 # Private or large data
 data/private/
 data/**/*.parquet
+data/**/*.csv.gz
 data/**/*.zip
 
 # Secrets

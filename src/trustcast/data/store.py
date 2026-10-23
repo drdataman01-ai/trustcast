@@ -82,6 +82,43 @@ def save_vintages(df: pd.DataFrame, name: str) -> Path:
     return path
 
 
+# ---------- Datasets: many series in one long table (series_id, date, value) ----------
+
+def _has_parquet() -> bool:
+    try:
+        import pyarrow  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def dataset_path(name: str, private: bool = False) -> Path:
+    """data/<name>.parquet (or .csv.gz if pyarrow isn't installed)."""
+    ext = ".parquet" if _has_parquet() else ".csv.gz"
+    return (private_dir() if private else data_dir()) / f"{name}{ext}"
+
+
+def save_dataset(df: pd.DataFrame, name: str, private: bool = False) -> Path:
+    path = dataset_path(name, private)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.suffix == ".parquet":
+        df.to_parquet(path, index=False)
+    else:
+        df.to_csv(path, index=False, date_format="%Y-%m-%d")
+    return path
+
+
+def load_dataset(name: str) -> pd.DataFrame:
+    """Load data/<name>.parquet|.csv.gz, or the same under data/private/."""
+    for folder in (data_dir(), private_dir()):
+        for ext in (".parquet", ".csv.gz"):
+            path = folder / f"{name}{ext}"
+            if path.exists():
+                df = pd.read_parquet(path) if ext == ".parquet" else pd.read_csv(path)
+                return df.assign(date=pd.to_datetime(df["date"]))
+    raise FileNotFoundError(f"No dataset '{name}' in {data_dir()}. Run: python scripts/etl.py {name}")
+
+
 def available() -> list[str]:
     """Series names in data/ and data/private/ (vintage files excluded)."""
     names = []

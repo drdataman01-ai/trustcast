@@ -16,8 +16,14 @@ chronos-forecasting
 # tirex-ts        # TiRex
 # nixtla          # TimeGPT API client
 
-# Data sources
+# Data sources and storage
 fredapi
+yfinance
+lxml            # S&P 500 member list from Wikipedia
+pyarrow         # parquet files in data/
+
+# Optional: Darts, as a converter / cross-check (Prepared.to_darts())
+# darts
 
 # Dev
 pytest
