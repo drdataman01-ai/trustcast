@@ -25,7 +25,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from trustcast.data.select import future_dates, load_one, short_freq
+from trustcast.data.select import future_dates, load_one
 from trustcast.models import LicenseError, get_model
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,7 +53,7 @@ def main() -> None:
     if sel.filled:
         print(f"Note: filled {sel.filled} missing value(s) during preparation.")
     y = sel.y.iloc[-args.context:]
-    freq = short_freq(sel.y.index)
+    freq = sel.freq  # None for non-seasonal data such as stock prices
     dates = future_dates(sel.y.index, args.horizon)
     print(f"{sel.label}: {len(sel.y)} observations to {sel.y.index[-1]:%Y-%m-%d}; "
           f"last value {sel.levels.iloc[-1]:.2f}. Using {len(y)} as context, {args.horizon} steps ahead.\n")

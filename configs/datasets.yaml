@@ -6,6 +6,7 @@
 #
 # prepare options (see src/trustcast/data/prepare.py):
 #   freq:       null keeps observed dates; "B", "MS", "QS" etc. put series on a regular calendar
+#   resample:   e.g. W-FRI: each week's last value (weekly close), after daily gaps are filled
 #   align:      with freq null, put every series on the dates seen across the dataset
 #               (for stocks: the trading calendar), so missing days count as gaps
 #   fill:       ffill | interpolate | none, for gaps up to fill_limit steps
@@ -16,6 +17,7 @@
 
 sp500:
   source: yahoo
+  seasonal: false           # stock prices: no weekly/annual seasonal pattern for models to use
   tickers: sp500            # current members from Wikipedia, or a list: [AAPL, MSFT]
   start: "2020-01-01"
   field: Close              # adjusted close (auto_adjust)
@@ -29,6 +31,23 @@ sp500:
     transform: log_return
     clip_mad: null
     min_obs: 250            # about one trading year
+
+sp500_weekly:
+  source: yahoo
+  seasonal: false
+  tickers: sp500
+  start: "2005-01-01"       # longer history: 512 weeks of context is about 10 years
+  field: Close
+  private: false
+  prepare:
+    freq: null
+    align: true             # daily trading calendar first, so halts are caught
+    fill: ffill
+    fill_limit: 5           # up to 5 missing trading days filled before resampling
+    resample: W-FRI         # weekly close: each week's last trading day
+    transform: log_return
+    clip_mad: null
+    min_obs: 104            # two years of weeks
 
 macro:
   source: fred

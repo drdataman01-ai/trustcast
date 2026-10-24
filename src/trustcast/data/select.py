@@ -20,6 +20,7 @@ class Selected:
     levels: pd.Series     # original units, for charts and the last value
     log_scale: bool       # True: forecasts must be exponentiated back to levels
     filled: int = 0       # missing values filled during preparation
+    freq: str | None = None  # 'M', 'Q', 'W', 'D' for seasonal models; None = no seasonality
 
 
 def load_one(series: str, dataset: str | None = None, transform: str = "log") -> Selected:
@@ -27,7 +28,7 @@ def load_one(series: str, dataset: str | None = None, transform: str = "log") ->
     (calendar alignment, gap filling) and put on the `transform` scale ("log" or "none")."""
     if not dataset:
         s = store.load_series(series)
-        return Selected(series, s, s, False)
+        return Selected(series, s, s, False, freq=short_freq(s.index))
 
     df = store.load_dataset(dataset)
     ids = df["series_id"].unique()
@@ -36,7 +37,8 @@ def load_one(series: str, dataset: str | None = None, transform: str = "log") ->
         hint = f" Did you mean: {', '.join(close)}?" if close else ""
         raise KeyError(f"'{series}' is not in dataset '{dataset}'.{hint}")
 
-    cfg = dict(etl.load_spec(dataset).get("prepare", {}))
+    spec = etl.load_spec(dataset)
+    cfg = dict(spec.get("prepare", {}))
     cfg.update(transform=transform, min_obs=32)
     cfg = PrepConfig(**cfg)
     calendar = pd.DatetimeIndex(sorted(df["date"].unique())) if cfg.align and not cfg.freq else None
@@ -45,7 +47,8 @@ def load_one(series: str, dataset: str | None = None, transform: str = "log") ->
     if y is None:
         raise ValueError(f"{series} can't be used: {info['reason']}.")
     levels = np.exp(y) if transform == "log" else y
-    return Selected(f"{dataset}/{series}", y, levels, transform == "log", int(info.get("gaps") or 0))
+    freq = None if spec.get("seasonal") is False else short_freq(y.index)
+    return Selected(f"{dataset}/{series}", y, levels, transform == "log", int(info.get("gaps") or 0), freq)
 
 
 def future_dates(index: pd.DatetimeIndex, horizon: int) -> pd.DatetimeIndex:
@@ -69,3 +72,12 @@ def short_freq(index: pd.DatetimeIndex) -> str | None:
         if f.startswith(code):
             return code
     return None
+
+
+def trading_days_per_step(index: pd.DatetimeIndex) -> int:
+    """Approximate trading days in one step: 1 daily, 5 weekly, 21 monthly, 63 quarterly."""
+    code = short_freq(index)
+    if code is None:
+        typical = pd.Series(index[-60:]).diff().dt.days.median()
+        return 1 if typical <= 1.5 else 5 if typical <= 8 else 21 if typical <= 31 else 63
+    return {"D": 1, "W": 5, "M": 21, "Q": 63}[code]

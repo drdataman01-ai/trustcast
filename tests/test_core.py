@@ -160,3 +160,18 @@ def test_walkforward_no_lookahead_and_calibration():
     scored = score_rows(run_backtest({"gauss": Gauss()}, rw, cfg, progress=False), cfg.levels)
     s = summarize(scored, cfg.levels, ["model"]).iloc[0]
     assert abs(s["coverage_80"] - 0.8) < 0.08 and abs(s["coverage_95"] - 0.95) < 0.05
+
+
+def test_weekly_resample_uses_last_trading_day():
+    import pandas as pd
+
+    from trustcast.data.prepare import PrepConfig, prepare_one
+
+    idx = pd.bdate_range("2020-01-06", "2020-06-17")       # ends mid-week (Wednesday)
+    idx = idx[idx != pd.Timestamp("2020-04-10")]             # Good Friday, market closed
+    s = pd.Series(np.arange(len(idx), dtype=float) + 100, index=idx)
+    cal = pd.DatetimeIndex(idx)
+    y, info = prepare_one(s, PrepConfig(align=True, resample="W-FRI", min_obs=10), cal)
+    assert pd.infer_freq(y.index) == "W-FRI"
+    assert y.loc["2020-04-10"] == s.loc["2020-04-09"]       # holiday Friday -> Thursday close
+    assert y.index[-1] == pd.Timestamp("2020-06-12")         # unfinished final week dropped

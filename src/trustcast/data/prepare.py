@@ -9,9 +9,10 @@ Steps, per series:
   3. put on a calendar: a regular one if `freq` is set, or with `align`, the dates seen
      across the whole dataset (e.g. trading days), so a missing day shows up as a gap
   4. fill short interior gaps (`fill`, up to `fill_limit` steps); drop series with longer gaps
-  5. transform (log, log returns, % change, differences), keeping what's needed to undo it
-  6. optionally clip outliers on the transformed scale
-  7. drop series shorter than `min_obs`
+  5. optionally resample, e.g. to weekly (each week's last value), after daily gaps are handled
+  6. transform (log, log returns, % change, differences), keeping what's needed to undo it
+  7. optionally clip outliers on the transformed scale
+  8. drop series shorter than `min_obs`
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ TRANSFORMS = ("none", "log", "log_return", "pct_change", "diff")
 class PrepConfig:
     freq: str | None = None          # "B", "D", "W", "MS", "QS"... None = keep observed dates
     align: bool = False              # with freq None: use every date seen in the dataset (trading days)
+    resample: str | None = None      # e.g. "W-FRI": each week's last value (weekly close)
     fill: str = "ffill"              # ffill | interpolate | none
     fill_limit: int = 5              # longest gap (in steps) that may be filled
     transform: str = "none"          # one of TRANSFORMS
@@ -124,6 +126,11 @@ def prepare_one(s: pd.Series, cfg: PrepConfig,
     if s.isna().any():
         return None, {**info, "status": "dropped",
                       "reason": f"gap longer than {cfg.fill_limit} steps"}
+    if cfg.resample:
+        raw_last = s.index[-1]
+        s = s.resample(cfg.resample).last().dropna()
+        if len(s) and raw_last < s.index[-1]:
+            s = s.iloc[:-1]  # drop an unfinished final period (e.g. a week still in progress)
     if cfg.transform in ("log", "log_return") and (s <= 0).any():
         return None, {**info, "status": "dropped", "reason": "non-positive values; can't take logs"}
     info["last_level"] = float(s.iloc[-1])

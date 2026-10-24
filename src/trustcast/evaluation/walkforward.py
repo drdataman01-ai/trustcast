@@ -40,7 +40,7 @@ class BacktestConfig:
     step: int = 5                     # steps the origin moves each time (5 trading days = 1 week)
     context: int = 512                # most recent observations given to each model
     min_history: int = 252            # first origin needs at least this much history
-    start: str | None = None          # first origin date (e.g. after the models' release dates)
+    start: str | None = None          # first forecast target date (e.g. after the models' release dates)
     end: str | None = None            # last origin date
     max_origins: int | None = None    # keep only the most recent N origins
     quantiles: list[float] = field(default_factory=lambda: list(DEFAULT_QUANTILES))

@@ -5,6 +5,9 @@ Usage:
   python scripts/backtest.py --dataset sp500 --series LMT --models chronos-2 timesfm-2.5 arima seasonal-naive
   python scripts/backtest.py --dataset sp500 --series LMT --models chronos-2 seasonal-naive --start 2025-11-01
   python scripts/backtest.py --series unemployment --horizon 12 --step 1 --models chronos-2 ets seasonal-naive
+  python scripts/backtest.py --dataset sp500_weekly --series LMT --horizon 4 --step 1 --models chronos-2 seasonal-naive
+
+Compare runs at different frequencies on one axis with scripts/compare_backtests.py.
 
 Defaults: 21-step forecasts (about one trading month), origin moved 5 steps (one trading
 week), 512 steps of context, at least 252 steps of history before the first origin.
@@ -38,7 +41,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from trustcast.data.select import load_one, short_freq
+from trustcast.data.select import load_one, trading_days_per_step
 from trustcast.evaluation.walkforward import (
     BacktestConfig, compare_to_baseline, origin_positions, quantile_calibration,
     run_backtest, score_rows, summarize,
@@ -67,7 +70,7 @@ def main() -> None:
     p.add_argument("--step", type=int, default=5, help="Steps between origins (5 = one trading week)")
     p.add_argument("--context", type=int, default=512)
     p.add_argument("--min-history", type=int, default=252)
-    p.add_argument("--start", help="First origin date, e.g. 2025-11-01")
+    p.add_argument("--start", help="Forecast targets start on or after this date, e.g. 2025-11-01")
     p.add_argument("--end", help="Last origin date")
     p.add_argument("--max-origins", type=int, help="Use only the most recent N origins")
     p.add_argument("--transform", choices=["log", "none"], default="log")
@@ -100,7 +103,7 @@ def main() -> None:
         except (NotImplementedError, LicenseError) as e:
             print(f"Skipping {name}: {e}")
 
-    freq = short_freq(sel.y.index)
+    freq = sel.freq  # None for non-seasonal data such as stock prices
     forecasts = []
     for name, model in models.items():
         try:
@@ -137,6 +140,7 @@ def main() -> None:
         "series": sel.label, "transform": args.transform, "config": cfg.to_dict(),
         "origins": len(positions), "first_origin": str(first.date()), "last_origin": str(last.date()),
         "baseline": args.baseline, "git_commit": git_commit(), "run_at": stamp,
+        "trading_days_per_step": trading_days_per_step(sel.y.index), "seasonal_freq": freq,
         "data_sha256": hashlib.sha256(sel.y.to_numpy().tobytes()).hexdigest()[:16],
         "models": {m: {k: roster[m].get(k) for k in ("hf_id", "revision", "license", "version")}
                    for m in models if m in roster},
