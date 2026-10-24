@@ -1,6 +1,7 @@
 # Datasets for the ETL pipeline: python scripts/etl.py <name>
 #
 # Each entry: where the data comes from (extract), and how to prepare it for models.
+# `from: <dataset>` reuses another dataset's data in data/ with different preparation.
 # Output: data/<name>.parquet (or data/private/ when private: true), long format:
 #   series_id, date, value
 #
@@ -33,12 +34,9 @@ sp500:
     min_obs: 250            # about one trading year
 
 sp500_weekly:
-  source: yahoo
+  from: sp500               # resample the daily sp500 data already in data/ (no download)
   seasonal: false
-  tickers: sp500
-  start: "2005-01-01"       # longer history: 512 weeks of context is about 10 years
-  field: Close
-  private: false
+  min_history: 52           # backtests: one year of weeks before the first forecast
   prepare:
     freq: null
     align: true             # daily trading calendar first, so halts are caught
@@ -47,7 +45,16 @@ sp500_weekly:
     resample: W-FRI         # weekly close: each week's last trading day
     transform: log_return
     clip_mad: null
-    min_obs: 104            # two years of weeks
+    min_obs: 52
+
+# For more weekly history, download from 2005 instead (slow; Yahoo may throttle):
+# sp500_weekly_long:
+#   source: yahoo
+#   seasonal: false
+#   tickers: sp500
+#   start: "2005-01-01"
+#   field: Close
+#   prepare: {align: true, fill: ffill, fill_limit: 5, resample: W-FRI, transform: log_return, min_obs: 104}
 
 macro:
   source: fred

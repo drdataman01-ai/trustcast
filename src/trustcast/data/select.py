@@ -30,14 +30,14 @@ def load_one(series: str, dataset: str | None = None, transform: str = "log") ->
         s = store.load_series(series)
         return Selected(series, s, s, False, freq=short_freq(s.index))
 
-    df = store.load_dataset(dataset)
+    spec = etl.load_spec(dataset)
+    df = store.load_dataset(spec.get("from", dataset))   # derived datasets reuse another's data
     ids = df["series_id"].unique()
     if series not in ids:
         close = difflib.get_close_matches(series, ids, n=5)
         hint = f" Did you mean: {', '.join(close)}?" if close else ""
         raise KeyError(f"'{series}' is not in dataset '{dataset}'.{hint}")
 
-    spec = etl.load_spec(dataset)
     cfg = dict(spec.get("prepare", {}))
     cfg.update(transform=transform, min_obs=32)
     cfg = PrepConfig(**cfg)

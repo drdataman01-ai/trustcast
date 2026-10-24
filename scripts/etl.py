@@ -5,6 +5,7 @@ Usage:
   python scripts/etl.py sp500 --import-pickle ~/Downloads/data/stocks.pkl   # reuse a saved download
   python scripts/etl.py sp500 --skip-extract        # re-prepare from data/ without downloading
   python scripts/etl.py macro
+  python scripts/etl.py sp500_weekly   # derived from sp500: only re-prepares, no download
 
 Datasets are defined in configs/datasets.yaml. Reports go to outputs/etl/:
   <name>_validation.csv  coverage per series after extraction
@@ -34,7 +35,11 @@ def main():
     out = ROOT / "outputs" / "etl"
     out.mkdir(parents=True, exist_ok=True)
 
-    if args.skip_extract:
+    if spec.get("from"):
+        df = store.load_dataset(spec["from"])
+        print(f"{args.dataset} is prepared from the '{spec['from']}' data already in data/ "
+              f"({df['series_id'].nunique()} series); nothing to download.")
+    elif args.skip_extract:
         df = store.load_dataset(args.dataset)
         print(f"Loaded {len(df):,} rows from data/")
     else:

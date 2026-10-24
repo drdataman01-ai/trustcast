@@ -69,7 +69,8 @@ def main() -> None:
     p.add_argument("--horizon", type=int, default=21)
     p.add_argument("--step", type=int, default=5, help="Steps between origins (5 = one trading week)")
     p.add_argument("--context", type=int, default=512)
-    p.add_argument("--min-history", type=int, default=252)
+    p.add_argument("--min-history", type=int, default=None,
+                   help="History required before the first forecast (default: dataset setting, else 252)")
     p.add_argument("--start", help="Forecast targets start on or after this date, e.g. 2025-11-01")
     p.add_argument("--end", help="Last origin date")
     p.add_argument("--max-origins", type=int, help="Use only the most recent N origins")
@@ -82,8 +83,12 @@ def main() -> None:
     except (KeyError, ValueError, FileNotFoundError) as e:
         sys.exit(e.args[0] if e.args else str(e))
 
+    min_history = args.min_history
+    if min_history is None:
+        from trustcast.data.etl import load_spec
+        min_history = (load_spec(args.dataset).get("min_history") if args.dataset else None) or 252
     cfg = BacktestConfig(horizon=args.horizon, step=args.step, context=args.context,
-                         min_history=args.min_history, start=args.start, end=args.end,
+                         min_history=min_history, start=args.start, end=args.end,
                          max_origins=args.max_origins)
     positions = origin_positions(sel.y.index, cfg)
     if not positions:
