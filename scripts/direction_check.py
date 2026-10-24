@@ -1,8 +1,10 @@
 """Predicted vs actual change for a finished back-test: did any model call the direction?
 
 Usage:
-  python scripts/direction_check.py outputs/backtests/sp500_weekly_LMT_h4_s1_<time>
-  python scripts/direction_check.py outputs/backtests/sp500_LMT_h21_s5_<time> --step 5
+  python scripts/direction_check.py sp500_weekly_LMT     # newest weekly LMT run
+  python scripts/direction_check.py sp500_LMT --step 20  # newest daily LMT run, 20 days ahead
+  python scripts/direction_check.py                      # newest run of any kind
+  python scripts/direction_check.py outputs/backtests/sp500_weekly_LMT_h4_s1_20261023-1412
 
 --step defaults to the run's horizon. Works on runs made before this check existed:
 the last value each model saw is looked up again from data/.
@@ -21,13 +23,33 @@ from trustcast.data.select import load_one
 from trustcast.evaluation.walkforward import direction_check, plot_direction
 
 
+ROOT = Path(__file__).resolve().parents[1]
+BACKTESTS = ROOT / "outputs" / "backtests"
+
+
+def find_run(arg: str) -> Path:
+    """A folder path as given, else the newest run in outputs/backtests whose name starts with arg."""
+    if arg and (Path(arg) / "config.json").exists():
+        return Path(arg)
+    prefix = Path(arg).name if arg else ""
+    runs = sorted((d for d in BACKTESTS.glob(f"{prefix}*") if (d / "config.json").exists()),
+                  key=lambda d: d.name[-13:])  # names end in _YYYYMMDD-HHMM
+    if not runs:
+        have = "\n  ".join(sorted(d.name for d in BACKTESTS.glob("*") if d.is_dir())) or "(none)"
+        raise SystemExit(f"No back-test run matches '{arg}'. Runs in {BACKTESTS}:\n  {have}")
+    return runs[-1]
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("run", help="Back-test output folder")
+    p.add_argument("run", nargs="?", default="",
+                   help="Back-test folder, or the start of its name (e.g. sp500_weekly_LMT); "
+                        "the newest match is used. Omit for the newest run.")
     p.add_argument("--step", type=int, help="Steps ahead to check (default: the run's horizon)")
     args = p.parse_args()
 
-    run = Path(args.run)
+    run = find_run(args.run)
+    print(f"Run: {run}")
     meta = json.loads((run / "config.json").read_text())
     scored = pd.read_csv(run / "forecasts.csv", parse_dates=["origin", "target_date"])
     step = args.step or meta["config"]["horizon"]
