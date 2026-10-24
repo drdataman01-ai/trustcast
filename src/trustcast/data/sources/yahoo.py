@@ -9,11 +9,47 @@ import pandas as pd
 WIKI_SP500 = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
 
 
+USER_AGENT = "TrustCast/0.1 (research; https://github.com/drdataman01-ai/trustcast)"
+
+
 def sp500_symbols() -> list[str]:
     """Current S&P 500 members from Wikipedia, in Yahoo's format (BRK.B -> BRK-B).
-    Note: today's members applied to past dates causes survivorship bias."""
-    table = pd.read_html(WIKI_SP500)[0]
-    return sorted(table["Symbol"].str.replace(".", "-", regex=False).tolist())
+
+    Wikipedia refuses requests without a User-Agent, so one is sent. Each successful
+    fetch is saved to data/sp500_symbols.txt. If Wikipedia can't be reached, that file is
+    used, or failing that the tickers already in the sp500 dataset.
+    Note: today's members applied to past dates causes survivorship bias.
+    """
+    from io import StringIO
+
+    from .. import store
+
+    cache = store.data_dir() / "sp500_symbols.txt"
+    try:
+        import requests
+
+        resp = requests.get(WIKI_SP500, headers={"User-Agent": USER_AGENT}, timeout=30)
+        resp.raise_for_status()
+        table = pd.read_html(StringIO(resp.text))[0]
+        symbols = sorted(table["Symbol"].astype(str).str.replace(".", "-", regex=False).tolist())
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text("\n".join(symbols) + "\n")
+        return symbols
+    except Exception as e:
+        if cache.exists():
+            print(f"Couldn't fetch the S&P 500 list from Wikipedia ({e}); using {cache}.")
+            return [t for t in cache.read_text().split() if t]
+        try:
+            ids = sorted(store.load_dataset("sp500")["series_id"].unique())
+            print(f"Couldn't fetch the S&P 500 list from Wikipedia ({e}); "
+                  f"using the {len(ids)} tickers in the sp500 dataset.")
+            return ids
+        except FileNotFoundError:
+            pass
+        raise RuntimeError(
+            f"Couldn't fetch the S&P 500 list from Wikipedia ({e}). Set `tickers:` to a list "
+            f"in configs/datasets.yaml, or put one ticker per line in {cache}."
+        ) from e
 
 
 def download(tickers: list[str] | str, start: str, end: str | None = None,

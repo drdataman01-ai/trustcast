@@ -23,6 +23,7 @@ chronos-forecasting
 # Data sources and storage
 fredapi
 yfinance
+requests
 lxml            # S&P 500 member list from Wikipedia
 pyarrow         # parquet files in data/
 
