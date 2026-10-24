@@ -72,7 +72,8 @@ def run_backtest(models: dict[str, ForecastModel], y: pd.Series, cfg: BacktestCo
     """Return every forecast as one row per (model, origin, step).
 
     Columns: model, origin (date of the last observation the model saw), target_date,
-    step, actual, q<level> for each quantile, scale (in-sample naive MAE at the origin).
+    step, actual, origin_value (the last value seen), q<level> for each quantile,
+    scale (in-sample naive MAE at the origin).
     """
     values = y.to_numpy(dtype=float)
     index = y.index
@@ -94,6 +95,7 @@ def run_backtest(models: dict[str, ForecastModel], y: pd.Series, cfg: BacktestCo
                 "target_date": index[t:t + cfg.horizon],
                 "step": np.arange(1, cfg.horizon + 1),
                 "actual": actual,
+                "origin_value": values[t - 1],                      # last value the model saw
                 "scale": scale,
                 **{f"q{q:g}": np.asarray(fc.quantiles[q], dtype=float) for q in cfg.quantiles},
             })
@@ -221,3 +223,88 @@ def compare_to_baseline(scored: pd.DataFrame, baseline: str, cfg: BacktestConfig
             f"dm_stat_step{cfg.horizon}": s_ae, f"p_value_step{cfg.horizon}": p_ae,
         })
     return pd.DataFrame(rows)
+
+
+def direction_check(scored: pd.DataFrame, step: int, log_scale: bool = True) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Did models predict the direction and size of the move over `step` steps?
+
+    For each forecast: predicted change = median - last value seen; actual change =
+    actual - last value seen (in %, when the data are log prices). Returns the per-forecast
+    changes and a summary per model:
+      corr        correlation of predicted and actual changes (skill > 0)
+      hit_rate    share of forecasts with the right direction (ignoring flat predictions)
+      flat_share  share of forecasts that predicted essentially no move
+      up_share    share of periods the series actually rose: "always predict up" scores this
+      slope       regression slope of actual on predicted change (1 = well-scaled, 0 = no signal)
+    Forecasts overlap when step > origin spacing, so treat small differences with caution.
+    """
+    d = scored[scored["step"] == step].copy()
+    pred = d["q0.5"] - d["origin_value"]
+    act = d["actual"] - d["origin_value"]
+    if log_scale:  # log-price changes -> % changes in price
+        pred, act = 100 * np.expm1(pred), 100 * np.expm1(act)
+    d["predicted_change"], d["actual_change"] = pred, act
+    # Predicted moves under 1/1000 of the typical actual move count as "flat" (no call made)
+    flat = 1e-3 * float(np.nanstd(act)) if len(act) else 0.0
+    rows = []
+    for m, g in d.groupby("model"):
+        x, y = g["predicted_change"].to_numpy(), g["actual_change"].to_numpy()
+        nz = np.abs(x) > flat
+        varies = x.std() > flat
+        corr = float(np.corrcoef(x, y)[0, 1]) if varies else float("nan")
+        slope = float(np.polyfit(x, y, 1)[0]) if varies else float("nan")
+        rows.append({
+            "model": m, "forecasts": len(g), "corr": corr,
+            "flat_share": float(np.mean(~nz)),
+            "hit_rate": float(np.mean(np.sign(x[nz]) == np.sign(y[nz]))) if nz.any() else float("nan"),
+            "up_share": float(np.mean(y > 0)), "slope": slope,
+            "mean_abs_predicted_change": float(np.mean(np.abs(x))),
+            "mean_abs_actual_change": float(np.mean(np.abs(y))),
+        })
+    return d[["model", "origin", "target_date", "predicted_change", "actual_change"]], pd.DataFrame(rows)
+
+
+def plot_direction(changes: pd.DataFrame, summary: pd.DataFrame, step: int, label: str,
+                   path, unit: str = "%") -> None:
+    """Small multiples: predicted vs actual change per model, with a fitted line."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    models = list(summary["model"])
+    n = len(models)
+    cols = min(n, 3)
+    rows = int(np.ceil(n / cols))
+    fig, axes = plt.subplots(rows, cols, figsize=(4.2 * cols, 4.0 * rows), squeeze=False)
+    lim_y = np.nanpercentile(np.abs(changes["actual_change"]), 99) * 1.1
+    stats = summary.set_index("model")
+    for ax, m in zip(axes.flat, models):
+        g = changes[changes["model"] == m]
+        x, y = g["predicted_change"].to_numpy(), g["actual_change"].to_numpy()
+        ax.axhline(0, color="#D5DEE0", lw=1)
+        ax.axvline(0, color="#D5DEE0", lw=1)
+        ax.scatter(x, y, s=12, color="#0E6E6B", alpha=0.55, edgecolors="none")
+        lim_x = max(np.nanpercentile(np.abs(x), 99) * 1.3, 0.5)
+        if np.isfinite(stats.loc[m, "slope"]):
+            b, a = np.polyfit(x, y, 1)
+            xs = np.linspace(-lim_x, lim_x, 50)
+            ax.plot(xs, a + b * xs, color="#C98A1E", lw=2)
+        s = stats.loc[m]
+        ax.set_title(m, fontsize=11)
+        if np.isfinite(s["corr"]):
+            note = f"corr {s['corr']:.2f}\nright direction {s['hit_rate']:.0%}\n(rose {s['up_share']:.0%} of the time)"
+        else:
+            note = f"predicts essentially no move\n(rose {s['up_share']:.0%} of the time)"
+        ax.text(0.03, 0.97, note,
+                transform=ax.transAxes, va="top", fontsize=9, color="#33434E")
+        ax.set_xlim(-lim_x, lim_x)
+        ax.set_ylim(-lim_y, lim_y)
+        ax.set_xlabel(f"Predicted change ({unit})")
+        ax.set_ylabel(f"Actual change ({unit})")
+        ax.spines[["top", "right"]].set_visible(False)
+    for ax in list(axes.flat)[n:]:
+        ax.axis("off")
+    fig.suptitle(f"{label}: predicted vs actual change over {step} steps", fontsize=12)
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)

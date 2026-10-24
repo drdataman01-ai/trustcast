@@ -43,8 +43,8 @@ import pandas as pd
 
 from trustcast.data.select import load_one, trading_days_per_step
 from trustcast.evaluation.walkforward import (
-    BacktestConfig, compare_to_baseline, origin_positions, quantile_calibration,
-    run_backtest, score_rows, summarize,
+    BacktestConfig, compare_to_baseline, direction_check, origin_positions, plot_direction,
+    quantile_calibration, run_backtest, score_rows, summarize,
 )
 from trustcast.models import LicenseError, get_model, load_roster
 
@@ -140,6 +140,8 @@ def main() -> None:
     by_step.to_csv(out / "by_step.csv", index=False)
     calib.to_csv(out / "calibration.csv", index=False)
     vs_base.to_csv(out / "vs_baseline.csv", index=False)
+    changes, direction = direction_check(scored, cfg.horizon, sel.log_scale)
+    direction.to_csv(out / "direction.csv", index=False)
     roster = load_roster()
     meta = {
         "series": sel.label, "transform": args.transform, "config": cfg.to_dict(),
@@ -164,6 +166,8 @@ def main() -> None:
         print(f"\nAgainst {args.baseline} (skill > 0 = better; p < 0.05 = difference unlikely to be chance):")
         print(vs_base.set_index("model").round(3).to_string())
     print("\nIntervals: coverage_80 should be near 0.80 and coverage_95 near 0.95.")
+    print(f"\nDirection over {cfg.horizon} steps (corr > 0 and hit rate above up_share would show skill):")
+    print(direction.set_index("model")[["forecasts", "corr", "hit_rate", "up_share", "flat_share", "slope"]].round(3).to_string())
     print(f"\nSaved to {out}")
 
     # ---------- charts ----------
@@ -212,7 +216,9 @@ def main() -> None:
     ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
     fig.savefig(out / "forecasts_vs_actual.png", dpi=150)
-    print("Charts: by_step.png, forecasts_vs_actual.png")
+    plot_direction(changes, direction, cfg.horizon, sel.label, out / "direction.png",
+                   "%" if sel.log_scale else "units")
+    print("Charts: by_step.png, forecasts_vs_actual.png, direction.png")
 
 
 if __name__ == "__main__":

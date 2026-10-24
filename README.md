@@ -29,6 +29,7 @@ workflow and the rules for data and licenses.
 | `scripts/forecast.py` | Forecast one series with several models side by side |
 | `scripts/backtest.py` | Walk-forward back-test: e.g. 21-day forecasts, origin moved a week at a time, scored against a random walk |
 | `scripts/compare_backtests.py` | Overlay back-tests at different frequencies (daily vs weekly) on a trading-days-ahead axis |
+| `scripts/direction_check.py` | Predicted vs actual change for a finished back-test: did any model call the direction? |
 | `scripts/run_scorecard.py` | Back-test models and publish a scorecard to `archive/` |
 | `src/trustcast/` | The library: data, models, evaluation, uncertainty |
 
